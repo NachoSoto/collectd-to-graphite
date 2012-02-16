@@ -58,8 +58,17 @@ graphite_connection.on("error", function() {
 
 var request_handler = function(request, response) {
   var putval_re = /^PUTVAL ([^ ]+)(?: ([^ ]+=[^ ]+)?) ([0-9.]+)(:.*)/;
+  var chunks = [];
   request.addListener("data", function(chunk) {
-    metrics = chunk.toString().split("\n");
+    chunks.push(chunk.toString());
+  });
+  request.addListener("end", function(chunk) {
+    var body = chunks.join("");
+    if (parseInt(request.headers["content-length"]) != body.length) {
+      console.log("Content-Length: %d != body.length: %d\n",
+        request.headers["content-length"], body.length);
+    }
+    var metrics = body.split("\n");
     for (var i in metrics) {
       var m = putval_re.exec(metrics[i]);
       if (!m) {
