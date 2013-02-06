@@ -47,8 +47,8 @@ for (var i in types) {
 }
 
 var host = process.argv[2],
-    api_key = process.argv[3];
-
+    api_key = process.argv[3],
+    port = process.env.COLLECTD_PROXY_PORT || 3015;
 
 var graphite_connection = dgram.createSocket('udp4');
 
@@ -152,4 +152,4 @@ var request_handler = function(request, response) {
 
 var server = http.createServer();
 server.addListener("request", request_handler);
-server.listen(3015);
+server.listen(port);
