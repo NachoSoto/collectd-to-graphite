@@ -132,8 +132,10 @@ var request_handler = function(request, response) {
             // Kinda a hack
             metric = [ "", metric]
           }
-          name = api_key + '.' + name + "." + typesObj[metric[1]][v - 1];
+          name = name + "." + typesObj[metric[1]][v - 1];
         }
+
+        name = api_key + '.' + name;
         message = [name, values[v], time].join(" ");
 
         console.log(message);
