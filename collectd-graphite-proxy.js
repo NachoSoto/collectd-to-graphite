@@ -1,4 +1,6 @@
-/* TODO(sissel): make connections retry/etc 
+"use strict"
+
+/* TODO(sissel): make connections retry/etc
  * TODO(sissel): make graphite target configurable via command line
  *
  * This code is a work in progress.
@@ -19,8 +21,9 @@ var http = require("http");
 var net = require("net");
 var assert = require("assert");
 var fs = require('fs');
+var dgram = require('dgram');
 
-var types = fs.readFileSync('/usr/share/collectd/types.db', encoding='utf8').split("\n");
+var types = fs.readFileSync('/usr/share/collectd/types.db', 'utf8').split("\n");
 
 var typesObj = {};
 
@@ -29,7 +32,7 @@ var type_cut_re = /^([^\s]+)\s+(.*)/;
 
 for (var i in types) {
   if (!type_comments_re.exec(types[i])) {
-    typeSet = type_cut_re.exec(types[i])
+    var typeSet = type_cut_re.exec(types[i])
     if (!typeSet) { continue; }
     for (var t=0;t < typeSet.length;t++) {
       var name = typeSet[1];
@@ -43,19 +46,11 @@ for (var i in types) {
   }
 }
 
-var api_key = process.argv[3];
+var host = process.argv[2],
+    api_key = process.argv[3];
 
-try {
-  var graphite_connection = net.createConnection(2003, host=process.argv[2]);
-} catch (error) {
-  throw error;
-}
-graphite_connection.on("close", function() {
-  throw new Error("Connection closed");
-});
-graphite_connection.on("error", function() {
-  throw new Error("Connection error");
-});
+
+var graphite_connection = dgram.createSocket('udp4');
 
 var request_handler = function(request, response) {
   var putval_re = /^PUTVAL ([^ ]+)(?: ([^ ]+=[^ ]+)?) ([0-9.]+)(:.*)/;
@@ -122,6 +117,7 @@ var request_handler = function(request, response) {
         
         if ( values.length > 2 ) {
           var metric = name_parts[2];
+          var index;
 
           //  If the metric contains a '-' (after removing the instance name)
           //  then we want to remove it before looking up in the types.db
@@ -136,11 +132,12 @@ var request_handler = function(request, response) {
         }
 
         name = api_key + '.' + name;
-        message = [name, values[v], time].join(" ");
+        var message = [name, values[v], time].join(" ");
 
         console.log(message);
 
-        graphite_connection.write(message + "\n");
+        var m = new Buffer(message + '\n');
+        graphite_connection.send(m, 0, m.length, 2003, host);
       }
 
     }
@@ -151,8 +148,8 @@ var request_handler = function(request, response) {
     response.write("OK");
     response.end();
   });
-}
+};
 
-var server = http.createServer()
-server.addListener("request", request_handler)
+var server = http.createServer();
+server.addListener("request", request_handler);
 server.listen(3015);
