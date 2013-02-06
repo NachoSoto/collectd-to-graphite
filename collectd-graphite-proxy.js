@@ -22,7 +22,7 @@ var fs = require('fs');
 
 var types = fs.readFileSync('/usr/share/collectd/types.db', encoding='utf8').split("\n");
 
-var typesObj = new Object;
+var typesObj = {};
 
 var type_comments_re = /^#/;
 var type_cut_re = /^([^\s]+)\s+(.*)/;
@@ -33,7 +33,7 @@ for (var i in types) {
     if (!typeSet) { continue; }
     for (var t=0;t < typeSet.length;t++) {
       var name = typeSet[1];
-      typesObj[name] = new Array();
+      typesObj[name] = [];
       var eachType = typeSet[2].split(", ")
       for (var u=0; u < eachType.length; u++){
         var theName = eachType[u].split(":")[0];
@@ -43,6 +43,7 @@ for (var i in types) {
   }
 }
 
+var api_key = process.argv[3];
 
 try {
   var graphite_connection = net.createConnection(2003, host=process.argv[2]);
@@ -95,7 +96,7 @@ var request_handler = function(request, response) {
         var host = name_parts[0].split(/_/)[0]
         rebuild = rebuild.concat(host)
 
-        // Pluigin names can contain an "instance" which is set apart by a dash
+        // Plugin names can contain an "instance" which is set apart by a dash
         var plugin = name_parts[1].split("-")
         rebuild = rebuild.concat(plugin[0])
         if (plugin.length > 1) {
@@ -131,7 +132,7 @@ var request_handler = function(request, response) {
             // Kinda a hack
             metric = [ "", metric]
           }
-          name = name + "." + typesObj[metric[1]][v - 1];
+          name = api_key + '.' + name + "." + typesObj[metric[1]][v - 1];
         }
         message = [name, values[v], time].join(" ");
         graphite_connection.write(message + "\n");
@@ -150,4 +151,4 @@ var request_handler = function(request, response) {
 
 var server = http.createServer()
 server.addListener("request", request_handler)
-server.listen(3012);
+server.listen(3015);
