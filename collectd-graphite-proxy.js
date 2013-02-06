@@ -46,9 +46,11 @@ for (var i in types) {
   }
 }
 
-var host = process.argv[2],
+var graphiteHost = process.argv[2],
     api_key = process.argv[3],
     port = process.env.COLLECTD_PROXY_PORT || 3015;
+
+console.log('Initialized for host ' + graphiteHost);
 
 var graphite_connection = dgram.createSocket('udp4');
 
@@ -137,7 +139,7 @@ var request_handler = function(request, response) {
         console.log(message);
 
         var m = new Buffer(message + '\n');
-        graphite_connection.send(m, 0, m.length, 2003, host);
+        graphite_connection.send(m, 0, m.length, 2003, graphiteHost);
       }
 
     }
@@ -149,6 +151,8 @@ var request_handler = function(request, response) {
     response.end();
   });
 };
+
+console.log('Listening on port ' + port);
 
 var server = http.createServer();
 server.addListener("request", request_handler);
