@@ -135,8 +135,10 @@ var request_handler = function(request, response) {
           name = api_key + '.' + name + "." + typesObj[metric[1]][v - 1];
         }
         message = [name, values[v], time].join(" ");
-        graphite_connection.write(message + "\n");
 
+        console.log(message);
+
+        graphite_connection.write(message + "\n");
       }
 
     }
