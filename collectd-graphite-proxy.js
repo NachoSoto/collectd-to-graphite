@@ -31,123 +31,125 @@ var type_comments_re = /^#/;
 var type_cut_re = /^([^\s]+)\s+(.*)/;
 
 for (var i in types) {
-  if (!type_comments_re.exec(types[i])) {
-    var typeSet = type_cut_re.exec(types[i])
-    if (!typeSet) { continue; }
-    for (var t=0;t < typeSet.length;t++) {
-      var name = typeSet[1];
-      typesObj[name] = [];
-      var eachType = typeSet[2].split(", ")
-      for (var u=0; u < eachType.length; u++){
-        var theName = eachType[u].split(":")[0];
-        typesObj[name].push(theName);
-      }
-    }
-  }
+	if (!type_comments_re.exec(types[i])) {
+		var typeSet = type_cut_re.exec(types[i])
+		if (!typeSet) { continue; }
+		for (var t=0;t < typeSet.length;t++) {
+			var name = typeSet[1];
+			typesObj[name] = [];
+			var eachType = typeSet[2].split(", ")
+			for (var u=0; u < eachType.length; u++){
+				var theName = eachType[u].split(":")[0];
+				typesObj[name].push(theName);
+			}
+		}
+	}
 }
 
 var graphiteHost = process.argv[2],
-    api_key = process.argv[3],
-    port = process.env.COLLECTD_PROXY_PORT || 3015;
+	api_key = process.argv[3],
+	port = process.env.COLLECTD_PROXY_PORT || 3015;
 
 console.log('Initialized for host ' + graphiteHost);
 
 var graphite_connection = dgram.createSocket('udp4');
 
 var request_handler = function(request, response) {
-  var putval_re = /^PUTVAL ([^ ]+)(?: ([^ ]+=[^ ]+)?) ([0-9.]+)(:.*)/;
-  var chunks = [];
-  request.addListener("data", function(chunk) {
-    chunks.push(chunk.toString());
-  });
-  request.addListener("end", function(chunk) {
-    var body = chunks.join("");
-    if (parseInt(request.headers["content-length"]) != body.length) {
-      console.log("Content-Length: %d != body.length: %d\n",
-        request.headers["content-length"], body.length);
-    }
-    var metrics = body.split("\n");
-    for (var i in metrics) {
-      var m = putval_re.exec(metrics[i]);
-      if (!m) {
-        continue;
-      }
-      var values = m[4].split(":");
+	var putval_re = /^PUTVAL ([^ ]+)(?: ([^ ]+=[^ ]+)?) ([0-9.]+)(:.*)/;
+	var chunks = [];
+	request.addListener("data", function(chunk) {
+		chunks.push(chunk.toString());
+	});
+	request.addListener("end", function(chunk) {
+		var body = chunks.join("");
+		if (parseInt(request.headers["content-length"]) != body.length) {
+			console.log("Content-Length: %d != body.length: %d\n",
+				request.headers["content-length"], body.length);
+		}
+		var metrics = body.split("\n");
+		for (var i in metrics) {
+			var m = putval_re.exec(metrics[i]);
+			if (!m) {
+				continue;
+			}
+			var values = m[4].split(":");
 
-      for (var v in values) {
-        
-        var name = m[1];
-        var options = m[2];
-        var time = m[3];
+			for (var v in values) {
 
-        if ( v == 0 ) {
-          continue;
-        }
+				var name = m[1];
+				var options = m[2];
+				var time = m[3];
 
-        // Replace some chars for graphite, split into parts
-        var name_parts = name.replace(/\./g, "_").replace(/\//g, ".").split(".");
+				if ( v == 0 ) {
+					continue;
+				}
 
-        // Start to construct the new name
-        var rebuild = ["agents"]
+				// Replace some chars for graphite, split into parts
+				var name_parts = name.replace(/\./g, "_").replace(/\//g, ".").split(".");
 
-        var host = name_parts[0].split(/_/)[0]
-        rebuild = rebuild.concat(host)
+				// Start to construct the new name
+				var rebuild = ["agents"]
 
-        // Plugin names can contain an "instance" which is set apart by a dash
-        var plugin = name_parts[1].split("-")
-        rebuild = rebuild.concat(plugin[0])
-        if (plugin.length > 1) {
-          var plugin_instance = plugin.slice(1).join("-")
-          rebuild = rebuild.concat(plugin_instance)
-        }
-        plugin = plugin[0]
+				var host = name_parts[0].split(/_/)[0]
+				rebuild = rebuild.concat(host)
 
-        // Type names can also contain an "instance"
-        var type = name_parts[2].split("-")
-        if (type[0] != plugin) {
-          // If type and plugin are equal, delete one to clean up a bit
-          rebuild = rebuild.concat(type[0])
-        }
-        if (type.length > 1) {
-          var type_instance = type.slice(1).join("-")
-          rebuild = rebuild.concat(type_instance)
-        }
-        type = type[0]
+				// Plugin names can contain an "instance" which is set apart by a dash
+				var plugin = name_parts[1].split("-")
+				rebuild = rebuild.concat(plugin[0])
+				if (plugin.length > 1) {
+					var plugin_instance = plugin.slice(1).join("-")
+					rebuild = rebuild.concat(plugin_instance)
+				}
+				plugin = plugin[0]
 
-        // Put the name back together
-        name = rebuild.join(".")
-        
-        if ( values.length > 2 ) {
-          var metric = name_parts[2];
-          var index;
+				// Type names can also contain an "instance"
+				var type = name_parts[2].split("-")
+				if (type[0] != plugin) {
+					// If type and plugin are equal, delete one to clean up a bit
+					rebuild = rebuild.concat(type[0])
+				}
+				if (type.length > 1) {
+					var type_instance = type.slice(1).join("-")
+					rebuild = rebuild.concat(type_instance)
+				}
+				type = type[0]
 
-          //  If the metric contains a '-' (after removing the instance name)
-          //  then we want to remove it before looking up in the types.db
-          index = metric.search(/-/)
-          if (index > -1) {
-            metric = /^([\w]+)-(.*)$/.exec(metric);
-          } else {
-            // Kinda a hack
-            metric = [ "", metric]
-          }
-          name = name + "." + typesObj[metric[1]][v - 1];
-        }
+				// Put the name back together
+				name = rebuild.join(".")
 
-        name = api_key + '.' + name;
-        var message = [name, values[v], time].join(" ");
+				if ( values.length > 2 ) {
+					var metric = name_parts[2];
+					var index;
 
-        var buffer = new Buffer(message + '\n');
-        graphite_connection.send(buffer, 0, buffer.length, 2003, graphiteHost);
-      }
+					//  If the metric contains a '-' (after removing the instance name)
+					//  then we want to remove it before looking up in the types.db
+					index = metric.search(/-/)
+					if (index > -1) {
+						metric = /^([\w]+)-(.*)$/.exec(metric);
+					} else {
+						// Kinda a hack
+						metric = [ "", metric]
+					}
+					name = name + "." + typesObj[metric[1]][v - 1];
+				}
 
-    }
-  });
 
-  request.addListener("end", function() {
-    response.writeHead(200, {"Content-Type": "text/plain"});
-    response.write("OK");
-    response.end();
-  });
+
+				name = api_key + '.' + name;
+				var message = [name, values[v], time].join(" ");
+
+				var buffer = new Buffer(message + '\n');
+				graphite_connection.send(buffer, 0, buffer.length, 2003, graphiteHost);
+			}
+
+		}
+	});
+
+	request.addListener("end", function() {
+		response.writeHead(200, {"Content-Type": "text/plain"});
+		response.write("OK");
+		response.end();
+	});
 };
 
 console.log('Listening on port ' + port);
