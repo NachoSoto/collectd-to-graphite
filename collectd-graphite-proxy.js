@@ -136,10 +136,8 @@ var request_handler = function(request, response) {
         name = api_key + '.' + name;
         var message = [name, values[v], time].join(" ");
 
-        console.log(message);
-
-        var m = new Buffer(message + '\n');
-        graphite_connection.send(m, 0, m.length, 2003, graphiteHost);
+        var buffer = new Buffer(message + '\n');
+        graphite_connection.send(buffer, 0, buffer.length, 2003, graphiteHost);
       }
 
     }
